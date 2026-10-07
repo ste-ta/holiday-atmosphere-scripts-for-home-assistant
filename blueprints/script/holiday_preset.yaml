@@ -1,0 +1,143 @@
+blueprint:
+  name: Holiday Atmosphere — Room Preset (v2.1)
+  description: Create a reusable room/effect preset after installing the Holiday Atmosphere v2.1 package
+    (shared controller, runner, light step, and session helper). This blueprint does not install those
+    dependencies. One show is active globally. Choose stop to create a Stop button.
+  domain: script
+  source_url: https://github.com/ste-ta/holiday-atmosphere-scripts-for-home-assistant/blob/main/blueprints/script/holiday_preset.yaml
+  homeassistant:
+    min_version: 2025.1.4
+  input:
+    lights:
+      description: Light entity IDs or light groups; required when starting, optional for stop.
+      selector:
+        entity:
+          multiple: true
+          domain: light
+      name: Lights
+      default: []
+    effect:
+      description: Which effect to play
+      selector:
+        select:
+          options:
+          - hell
+          - lightning
+          - graveyard
+          - halloween
+          - blood
+          - xmas_tree
+          - xmas_snowfall
+          - xmas_fireplace
+          - xmas_santa
+          - xmas_dinner
+          - xmas_party
+          - nye_countdown
+          - nye_confetti
+          - nye_midnight_flash
+          - nye_sparkler
+          - nye_champagne
+          - stop
+      name: Effect
+      default: xmas_fireplace
+    brightness_max:
+      name: Brightness ceiling
+      description: Maximum effect brightness (1–255); restoration is not capped.
+      default: 255
+      selector:
+        number:
+          min: 1
+          max: 255
+          step: 1
+          mode: slider
+    speed:
+      name: Effect speed
+      description: Ambient holds and transitions are divided by this factor; pacing and timestamp countdowns
+        stay fixed.
+      default: 1
+      selector:
+        number:
+          min: 0.25
+          max: 4
+          step: 0.25
+          mode: slider
+    duration:
+      name: Duration
+      description: Maximum running time in seconds; 0 means unlimited (finite effects still finish).
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 86400
+          step: 1
+          unit_of_measurement: s
+          mode: box
+    pacing:
+      name: Command pacing
+      description: 'Minimum delay after each action: conservative 1000 ms, balanced 250 ms, fast 100 ms.
+        Hardware reliability must be tested.'
+      default: balanced
+      selector:
+        select:
+          options:
+          - conservative
+          - balanced
+          - fast
+    gentle:
+      name: Gentle mode
+      description: Reject flashing effects. Choose an ambient effect.
+      default: false
+      selector:
+        boolean: {}
+    restore_on_stop:
+      name: Restore on completion
+      description: Automatic completion restores the original scene when true. Pass false with stop to
+        deliberately discard the backup.
+      default: true
+      selector:
+        boolean: {}
+    group_updates:
+      name: Send frames together
+      description: Send one shared frame to all available bulbs. Integration fan-out may still introduce
+        skew; not a guarantee of Zigbee groupcast.
+      default: false
+      selector:
+        boolean: {}
+    countdown_seconds:
+      name: Countdown length
+      description: Length in seconds for nye_countdown when no target timestamp is provided.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 86400
+          step: 1
+          unit_of_measurement: s
+          mode: box
+    countdown_target:
+      name: Countdown target
+      description: Optional future ISO 8601 timestamp with timezone, e.g. 2027-01-01T00:00:00+01:00. Only
+        for nye_countdown.
+      default: ''
+      selector:
+        text: {}
+mode: parallel
+max: 20
+sequence:
+- if: '{{ not has_service(''script'', ''holiday_atmosphere_controller'') }}'
+  then:
+  - stop: Install the Holiday Atmosphere v2.1 package before using this preset
+    error: true
+- action: script.holiday_atmosphere_controller
+  data:
+    lights: !input 'lights'
+    effect: !input 'effect'
+    brightness_max: !input 'brightness_max'
+    speed: !input 'speed'
+    duration: !input 'duration'
+    pacing: !input 'pacing'
+    gentle: !input 'gentle'
+    restore_on_stop: !input 'restore_on_stop'
+    group_updates: !input 'group_updates'
+    countdown_seconds: !input 'countdown_seconds'
+    countdown_target: !input 'countdown_target'
