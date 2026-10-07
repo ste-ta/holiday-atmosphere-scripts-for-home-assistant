@@ -1,569 +1,172 @@
-# 🎄🎃🎆 Holiday Atmosphere Scripts for Home Assistant
+# 🎄🎃🎆 Holiday Atmosphere — v2.1.0
 
-A collection of three specialized Home Assistant scripts that create various festive lighting effects for different holidays. Each script is optimized for reliability with older smart bulbs.
+**One script. All 16 effects. No helpers or companion scripts.**
 
----
+## Install
 
-## 📖 Table of Contents
+[![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fste-ta%2Fholiday-atmosphere-scripts-for-home-assistant%2Fblob%2Fmain%2Fblueprints%2Fscript%2Fholiday_atmosphere.yaml)
 
-- [Available Scripts](#-available-scripts)
-- [Features](#-features)
-- [Installation](#-installation)
-- [Usage](#-usage)
-  - [Basic Usage](#basic-usage)
-  - [Switch Between Effects](#switch-between-effects)
-  - [From the UI](#from-the-ui)
-  - [In Automations](#in-automations)
-  - [With Dashboard Buttons](#with-dashboard-buttons)
-- [Running Scripts Inside Other Scripts](#-running-scripts-inside-other-scripts)
-- [Available Effects by Holiday](#-available-effects-by-holiday)
-  - [🎃 Halloween Effects](#-halloween-effects)
-  - [🎄 Christmas Effects](#-christmas-effects)
-  - [🎆 New Year Effects](#-new-year-effects)
-- [Customization](#-customization)
-- [Performance Notes](#-performance-notes)
-- [Compatibility](#-compatibility)
-- [Contributing](#-contributing)
-- [Version History](#-version-history)
-- [Disclaimer](#️-disclaimer)
-- [License](#-license)
+1. Click **Import blueprint** above.
+2. Select **Create script**, choose your lights and a default effect, then **Save**.
+3. Run your new script.
 
----
+That is the entire setup. No configuration-file edits, restart, packages, fixed entity IDs, or helper creation. The import link becomes available on `main` after the v2.1 PR is merged; the PR description includes a preview link you can use before merging.
 
-## 📦 Available Scripts
+Requires Home Assistant **2025.1.4 or newer** and color-capable lights. Tested with the Home Assistant 2025.1.4 and 2026.10.0 script engines; physical bulb behavior depends on your integration and hardware.
 
-### 🎃 Halloween Atmosphere
-Creates spooky Halloween lighting effects
+Prefer pasting YAML? Create one script in Settings → Automations & scenes → Scripts, open **Edit in YAML**, paste [`holiday-atmosphere.yaml`](holiday-atmosphere.yaml), and save. Choose your lights when running it, or set `default_lights` and `default_effect` under its `variables:` to save your usual settings. You only need this one file.
 
-### 🎄 Christmas Atmosphere
-Creates warm and festive Christmas lighting effects
+## Use
 
-### 🎆 New Year Atmosphere
-Creates celebratory New Year's Eve lighting effects
+Run the saved script to use your default lights and effect. In Home Assistant's Actions tool or an automation, choose the script itself to see its fields. Override **Effect** to switch between Halloween, Christmas, and New Year patterns. Choose **stop** to stop updates and restore the original lighting.
 
----
+Each new call replaces the current run. Switching effects on the same lights preserves the original scene. Changing lights restores the old lights first, then captures a new scene. The script creates and deletes its temporary backup automatically.
 
-## ✨ Features
+To start it from an automation without waiting for an indefinitely running effect:
 
-- **Dedicated Effects**: Each script contains holiday-specific lighting effects
-- **Smart Bulb Optimized**: Special handling for older Philips Hue bulbs that prevents freezing and unavailability
-- **Individual Light Control**: Each light gets random variations for organic, lifelike effects
-- **Restart Mode**: Automatically stops previous effect when starting a new one
-- **Error Tolerant**: Continues running even if individual lights fail to respond
-- **XY Color Space**: Uses Zigbee-compatible XY color space for better reliability
-
----
-
-## 📋 Installation
-
-### Prerequisites
-- Home Assistant instance
-- RGB-capable smart lights (Philips Hue, WLED, etc.)
-- Lights must support `light.turn_on` service with `xy_color` and `brightness`
-
-### Step 1: Add the Scripts
-
-**Via UI**
-1. Go to **Settings** → **Automations & Scenes** → **Scripts**
-2. Click **Create Script** (bottom right)
-3. Click the **⋮** menu (top right) → **Edit in YAML**
-4. Paste the script code for the holiday you want
-5. Click **Save**
-
-Repeat for each holiday script you want to install.
-
----
-
-## 🎮 Usage
-
-### Basic Usage
-
-**Start an effect:**
 ```yaml
-service: script.halloween_atmosphere
+action: script.turn_on
+target:
+  entity_id: script.holiday_atmosphere  # Use your saved script's actual entity ID.
 data:
-  lights:
-    - light.living_room
-    - light.kitchen
-    - light.hallway
-  effect: hell
+  variables:
+    effect: xmas_fireplace
+    brightness_max: 150
+    duration: 1800
 ```
 
-**Stop the effect:**
+Stop using the same script, with no light list needed:
+
 ```yaml
-service: script.halloween_atmosphere
+action: script.turn_on
+target:
+  entity_id: script.holiday_atmosphere
 data:
-  lights:
-    - light.living_room
-    - light.kitchen
-    - light.hallway
-  effect: stop
+  variables:
+    effect: stop
 ```
 
-### Switch Between Effects
-Simply call the script again with a different effect - it will automatically stop the current one:
+A direct `action: script.holiday_atmosphere` call waits until the effect finishes or is stopped. Use `script.turn_on` when an automation should continue immediately, with values under `data.variables`. There is no `wait` option. See [Home Assistant's script calling documentation](https://www.home-assistant.io/actions/script.turn_on/).
 
-```yaml
-service: script.halloween_atmosphere
-data:
-  lights:
-    - light.living_room
-  effect: lightning
-```
+For a dashboard button, select your saved script as its action. Calling it without parameters runs the default preset you chose when installing. A custom Stop button can use:
 
-### From the UI
-1. Go to **Developer Tools** → **Services**
-2. Select the appropriate script (`script.halloween_atmosphere`, `script.christmas_atmosphere`, or `script.newyear_atmosphere`)
-3. Choose your lights in the **lights** field
-4. Select effect in the **effect** dropdown
-5. Click **Call Service**
-
-### In Automations
-```yaml
-automation:
-  - alias: "Halloween Evening Effect"
-    trigger:
-      - platform: sun
-        event: sunset
-    action:
-      - service: script.halloween_atmosphere
-        data:
-          lights:
-            - light.living_room
-            - light.dining_room
-          effect: graveyard
-```
-
-### With Dashboard Buttons
 ```yaml
 type: button
-name: "🔥 Hell Fire"
+name: Stop holiday lights
 tap_action:
-  action: call-service
-  service: script.halloween_atmosphere
+  action: perform-action
+  perform_action: script.turn_on
+  target:
+    entity_id: script.holiday_atmosphere
   data:
-    lights:
-      - light.living_room
-    effect: hell
+    variables:
+      effect: stop
 ```
 
----
+## Optional controls
 
-## 🔄 Running Scripts Inside Other Scripts
+Defaults work without changing these settings.
 
-You can call these atmosphere scripts from within other scripts or automations using the `script.turn_on` service. This is useful for creating complex lighting sequences or triggering effects as part of larger automation workflows.
+| Field | Default | Behavior |
+| --- | --- | --- |
+| `lights` | Saved lights | One light ID or a list; overrides your saved selection. Home Assistant light groups expand to individual members. |
+| `effect` | Saved effect | One of the 16 effects below, or `stop`. |
+| `brightness_max` | 255 | Brightness ceiling, 1–255. Applies to effects, not restoration. |
+| `speed` | 1 | 0.25–4; higher is faster. Scales ambient holds and transitions, but never bypasses command pacing or countdown deadlines. |
+| `duration` | 0 | Maximum effect duration in seconds, up to 86400. Zero means unlimited for repeating effects. |
+| `pacing` | balanced | Minimum delay after a light action: conservative 1000 ms, balanced 250 ms, fast 100 ms. These are tuning profiles, not hardware guarantees. |
+| `gentle` | false | Rejects flashing effects. Choose an ambient effect instead. |
+| `restore_on_stop` | true | Restore on natural completion or explicit Stop. False deliberately leaves the effect's final state and discards the backup. Target changes always restore old targets. |
+| `group_updates` | false | Send one shared frame to all available targets instead of randomized individual frames. Physical synchronization depends on the integration. |
+| `countdown_seconds` | 10 | Length of `nye_countdown`, 1–86400 seconds. |
+| `countdown_target` | empty | Future ISO 8601 timestamp including timezone; overrides countdown length. Only for `nye_countdown`. |
 
-### Basic Script Calling
+An explicit Stop defaults to restoration even if the previous run was started with `restore_on_stop: false`; pass false with Stop too if you intend to discard the backup.
 
-To call an atmosphere script from another script:
+Example countdown ending at midnight:
 
 ```yaml
-script:
-  my_evening_routine:
-    alias: "Evening Routine"
-    sequence:
-      # Turn on lights first
-      - service: light.turn_on
-        target:
-          entity_id:
-            - light.living_room
-            - light.kitchen
-        
-      # Wait a moment
-      - delay:
-          seconds: 2
-      
-      # Start the Christmas atmosphere effect
-      - service: script.turn_on
-        target:
-          entity_id: script.christmas_atmosphere
-        data:
-          variables:
-            lights:
-              - light.living_room
-              - light.kitchen
-            effect: xmas_fireplace
+action: script.turn_on
+target:
+  entity_id: script.holiday_atmosphere
+data:
+  variables:
+    effect: nye_countdown
+    countdown_target: '2027-01-01T00:00:00+01:00'
+    group_updates: true
+    restore_on_stop: false
 ```
 
-### Waiting for Script Completion
+Ten beats accelerate toward the timestamp. Expired phases are skipped rather than queued late when pacing or action latency cannot fit them. Use a separate midnight automation to switch to `nye_midnight_flash` or `nye_confetti`; an expired timestamp cannot be reused. Device delivery is not a precision clock.
 
-If you need to wait for the atmosphere effect to complete (though these run indefinitely until stopped), you can use `script.turn_on` with the `wait` option:
+## Effects
 
-```yaml
-script:
-  timed_halloween_effect:
-    alias: "Timed Halloween Effect"
-    sequence:
-      # Start Halloween effect
-      - service: script.turn_on
-        target:
-          entity_id: script.halloween_atmosphere
-        data:
-          variables:
-            lights:
-              - light.living_room
-            effect: lightning
-      
-      # Run for 5 minutes
-      - delay:
-          minutes: 5
-      
-      # Stop the effect
-      - service: script.turn_on
-        target:
-          entity_id: script.halloween_atmosphere
-        data:
-          variables:
-            lights:
-              - light.living_room
-            effect: stop
+Ranges below describe programmed values at `speed: 1` before brightness capping. Pacing, light count, action overhead, and device support affect what you see. Ambient holds start after frame updates and last at least the longest transition requested for that frame.
+
+| Holiday | Effect | Pattern | Brightness | Transition / hold (seconds) |
+| --- | --- | --- | --- | --- |
+| Halloween | `hell` | Random fire reds and oranges | 100–255 | 2 or 3 / 4 or 6 |
+| Halloween | `lightning` | Dim white followed by 4–9 bright/dim flash pairs | 3–9, 255 | 0 for flashes; variable short holds |
+| Halloween | `graveyard` | Low green, teal, and blue fog | 30–60 | 5 or 9 / 6 or 13 |
+| Halloween | `halloween` | Orange, purple, and green cycling | 150–220 | 3 or 5 / 4 or 8 |
+| Halloween | `blood` | Two red pulses followed by darkness | 5–199 | 0.3–0.8 / double-pulse holds, then 2 or 3 |
+| Christmas | `xmas_tree` | Red, green, and white cycling | 110–179 | 2 / 6 or 9 |
+| Christmas | `xmas_snowfall` | Blue and cool-white variation | 40–149 | 1 or 3 / 1 or 2 |
+| Christmas | `xmas_fireplace` | Bounded warm amber/orange palette | 90–199 | 1 or 2.5 / 1 or 2 |
+| Christmas | `xmas_santa` | Red, white, and green variation | 140–199 | 1.5 or 2.5 / 2 or 3 |
+| Christmas | `xmas_dinner` | Champagne glow; 30% chance per cycle of a highlight frame | 95–124; 140–169 highlights | 5 or 7; highlights 4 or 5 / base 4 or 6, highlights 8 or 11 |
+| Christmas | `xmas_party` | Random strobe, three-color cycle, red strobe, and dim-background solo spotlight; eight beats per mode | 20–255 | 0 / 0.3 or 0.7 |
+| New Year | `nye_countdown` | Ten accelerating bright/dim beats; finite | 5, 255 | 0 / scheduled deadline |
+| New Year | `nye_confetti` | Rapid red, green, purple, white, and amber cycling | 200–254 | 0 / pacing only |
+| New Year | `nye_midnight_flash` | Bright white, then fade to 120; finite | 255, 120 | 0, then 4 / 1, then 4 |
+| New Year | `nye_sparkler` | Rapid variation around cool white | 180–254 | 0 / pacing only |
+| New Year | `nye_champagne` | Warm golden cycling | 30–139 | 2 or 5 / 2 or 5 |
+
+Gentle mode excludes `lightning`, `blood`, `xmas_party`, `nye_countdown`, `nye_confetti`, `nye_midnight_flash`, and `nye_sparkler`. Gentle mode is a pattern filter, not a medical guarantee.
+
+## Restoration and limits
+
+The script snapshots the original lights once and preserves that scene across effect switches. It retains the backup if a restore action raises an error or a saved bulb is unavailable. Bring the bulb back online and run `effect: stop` again. Restoration success means the action returned successfully; it is not proof that every physical bulb reached its exact original color or brightness.
+
+Home Assistant's `restart` mode stops the current run **before validating the next call**. An invalid effect, target, or control therefore stops updates, but cannot overwrite the original backup. Correct the call to resume, or use Stop to restore. Single-script installation deliberately uses this native behavior.
+
+Existing bulbs that are unavailable at startup are excluded from that session; later-unavailable bulbs are skipped and the script continues to wait between attempts. Light action failures appear in traces/logs and do not stop the effect. No automatic retry or recovery from frozen bulbs is claimed.
+
+Dynamic scenes disappear on Home Assistant restart or scene reload. Script reloads and `script.turn_off` stop execution without automatic restoration. Use `effect: stop` for normal shutdown; after a restart, activate your preferred normal scene if needed. Stop before renaming/deleting this script, because its backup name follows its entity ID.
+
+Install one instance for one active show. If you intentionally create multiple copies, use disjoint bulbs: copies cannot coordinate ownership of overlapping targets. No fixed script entity ID is required.
+
+Pacing is per Home Assistant action. Group updates may fan out to multiple device commands, while individual sweeps grow with light count. Test on a small set of bulbs first. `duration` bounds new commands, but an in-flight action, its pacing delay, and restoration can finish later. This is not a hard real-time timeout.
+
+For device-native animation, evaluate [WLED presets/effects](https://www.home-assistant.io/integrations/wled/) or [Hue scenes](https://www.home-assistant.io/integrations/hue/). They are alternatives; this script does not automatically select them.
+
+## Upgrade
+
+From version 2.0, Stop each running holiday script first. Import this one replacement script, then update your dashboard/automation calls to its entity ID. It includes all three holidays, so you can remove the three old scripts after updating their callers. A backup already overwritten by 2.0 may need manual restoration of your preferred scene.
+
+If you tried an earlier revision of the v2.1 PR with shared scripts and a Text helper, Stop that show through its old entry point before switching. Those shared scripts, room-preset blueprints, package, and helper are no longer required; remove the old definitions after updating callers. Install the single blueprint or standalone file, not both.
+
+To update the blueprint later, re-import it from the same link and reload scripts. Stop the current effect before updating. Your saved blueprint inputs remain your default lights/effect.
+
+## Develop
+
+Edit [`holiday-atmosphere.yaml`](holiday-atmosphere.yaml), then regenerate the standalone blueprint:
+
+```sh
+python tools/build_blueprint.py
+python tools/build_blueprint.py --check
 ```
 
-### Switching Between Effects in a Script
+Regression tests execute this script in Home Assistant's real script engine with simulated device services and accelerated time. They cover restoration, target changes, concurrent calls, rejected inputs, unavailable bulbs, command errors, pacing, brightness caps, countdown deadlines, every effect, and single-blueprint import with saved defaults. The fixture registers no helper or companion-script services. Physical devices are not certified by these tests.
 
-You can create a script that cycles through multiple effects:
-
-```yaml
-script:
-  christmas_show:
-    alias: "Christmas Light Show"
-    sequence:
-      # Effect 1: Tree lights for 3 minutes
-      - service: script.turn_on
-        target:
-          entity_id: script.christmas_atmosphere
-        data:
-          variables:
-            lights:
-              - light.living_room
-              - light.hallway
-            effect: xmas_tree
-      - delay:
-          minutes: 3
-      
-      # Effect 2: Snowfall for 3 minutes
-      - service: script.turn_on
-        target:
-          entity_id: script.christmas_atmosphere
-        data:
-          variables:
-            lights:
-              - light.living_room
-              - light.hallway
-            effect: xmas_snowfall
-      - delay:
-          minutes: 3
-      
-      # Effect 3: Fireplace for remainder
-      - service: script.turn_on
-        target:
-          entity_id: script.christmas_atmosphere
-        data:
-          variables:
-            lights:
-              - light.living_room
-              - light.hallway
-            effect: xmas_fireplace
+```sh
+uv venv --python 3.13 .venv
+uv pip install --python .venv/bin/python --prerelease=allow -r requirements-test.txt
+.venv/bin/python -m pytest -q
 ```
 
-### Important Notes
+CI covers Home Assistant 2025.1.4 / Python 3.13 and 2026.10.0 / Python 3.14. See [CHANGELOG.md](CHANGELOG.md) for release history.
 
-- **Mode: Restart**: These scripts use `mode: restart`, which means calling them again will automatically stop the previous effect and start the new one
-- **Variables**: Always pass parameters using the `variables:` key when calling via `script.turn_on`
-- **No Wait Needed**: Since effects run indefinitely, you don't need to wait for completion unless you're timing the effect duration yourself
-- **Stopping Effects**: Always call the script with `effect: stop` to properly restore lights to their previous state
-
-### Example: Party Mode Automation
-
-```yaml
-automation:
-  - alias: "New Year's Party Sequence"
-    trigger:
-      - platform: time
-        at: "23:50:00"
-    action:
-      # 10-minute countdown effect
-      - service: script.turn_on
-        target:
-          entity_id: script.newyear_atmosphere
-        data:
-          variables:
-            lights:
-              - light.party_room
-            effect: nye_countdown
-      
-      - delay:
-          minutes: 10
-      
-      # Midnight flash at midnight
-      - service: script.turn_on
-        target:
-          entity_id: script.newyear_atmosphere
-        data:
-          variables:
-            lights:
-              - light.party_room
-            effect: nye_midnight_flash
-      
-      - delay:
-          seconds: 10
-      
-      # Confetti celebration
-      - service: script.turn_on
-        target:
-          entity_id: script.newyear_atmosphere
-        data:
-          variables:
-            lights:
-              - light.party_room
-            effect: nye_confetti
-```
-
----
-
-## 🎬 Available Effects by Holiday
-
-### 🎃 Halloween Effects
-
-**Hell (Fire)** - Flickering red and orange flames with varying intensities
-- Colors: Pure red, red-orange, orange, dark red
-- Brightness: 100-255 (variable)
-- Transition: 2-4 seconds (smooth)
-
-**Lightning** - Dramatic white flashes with darkness in between, staggered across lights
-- Colors: White flashes, dark blue ambient
-- Brightness: 3-10 (darkness), 255 (flash)
-- Transition: Instant flashes
-
-**Graveyard** - Slow, creeping green-blue fog effects with very low brightness
-- Colors: Muted poison green, dark teal, fog blue, moss green
-- Brightness: 30-60 (very dark)
-- Transition: 5-10 seconds (very slow)
-
-**Halloween (Classic)** - Classic Halloween colors with dynamic transitions
-- Colors: Pumpkin orange, purple, dark purple, poison green, lime green
-- Brightness: 150-220 (bright and festive)
-- Transition: 3-6 seconds (smooth)
-
-**Blood Pulse** - Deep red heartbeat rhythm with double pulse (LUB-DUB) then darkness
-- Colors: Dark red, blood red, crimson
-- Brightness: 5-200 (wide range for dramatic pulse)
-- Transition: Rhythmic (heartbeat pattern)
-
-**Stop** - Resets all lights to previous state with smooth 1-second transition
-
-### 🎄 Christmas Effects
-
-Perfect for cosy evenings – lively but never hectic, designed for relaxing by the fire.
-
-**Xmas Tree** - Slow multicolor Christmas tree lights (red, green, white)
-- Colors: Red, green, white with warm tones
-- Brightness: 110-180 (warm and inviting)
-- Transition: 2 seconds
-- Cycle: 7-11 seconds between colors
-
-**Xmas Snowfall** - Lively blue and white snowfall effect
-- Colors: Various blues and cool whites (includes white for brightness)
-- Brightness: 50-135 (more dynamic and lively)
-- Transitions: 2-4 seconds (faster, more energetic)
-- Pattern: Each light dances independently with staggered timing
-- Color hold: 2-3 seconds between changes (quicker shifts)
-- Cycle: 1-2 second breaks between updates (more frequent)
-- Perfect for: Active, playful winter atmosphere
-
-**Xmas Fireplace** - Realistic warm fireplace glow with organic flame movement
-- Colors: Deep warm orange/amber (0.55, 0.39 with variations)
-- Brightness: 100-180 (warm, cozy fireplace glow)
-- Transitions: 2-4 seconds (smooth, natural flame drift)
-- Pattern: Each light moves independently like real fire
-- Color variation: Random warm color shifts throughout the orange spectrum
-- Cycle: 2-4 second color hold, then shifts organically
-- Perfect for: Cosy evenings, ambient fireplace vibe
-
-**Xmas Dinner** - Warm champagne-colored candlelight for elegant dinner settings
-- Colors: Warm champagne/golden amber tones (0.45-0.52, 0.40-0.44)
-- Brightness: 95-125 base glow, 140-170 occasional highlights
-- Transitions: 4-8 seconds (very smooth and calm)
-- Pattern: Each light has occasional gentle brightening (30% chance)
-- Highlight duration: 8-12 seconds of gentle glow
-- Cycle: 2-4 second pauses between updates
-- Perfect for: Elegant Christmas dinner atmosphere
-
-**Xmas Santa** - Calm red, white, and green Santa-inspired effect
-- Colors: Red (Santa suit), white (snow/beard), green (Christmas tree)
-- Brightness: 100-160 (cosy and warm)
-- Transition: 5-8 seconds (very peaceful)
-- Cycle: 8-12 seconds
-
-**Xmas Party** - Synchronized dance party optimized for older Philips Hue bulbs
-- Colors: Red, green, white (classic Christmas colors)
-- Brightness: 255 full flashes, 100-150 glow between beats
-- **Hue-Safe Timing**: 100ms per bulb command + 300ms pauses between color changes (prevents freezing)
-- Continuously cycles through 4 party modes, 8 beats each:
-  - **Random Color Strobe**: Each beat flashes random Christmas color at 255, dims to 150
-  - **Three-Color Cycle**: Red → Green → White cycling with recovery pauses
-  - **Red Strobe**: Intense red flashing with Hue-safe delays
-  - **Dark Solo Spotlight**: Each light flashes individually (255) with long recovery pauses
-- 1-second pause between mode changes (allows bulbs to recover)
-- Fully compatible with older Philips Hue bulbs without freezing
-- Perfect for: Party mode without overwhelming older Zigbee hardware
-
-**Stop** - Restores lights to previous state with smooth 2-second transition
-
-### 🎆 New Year Effects
-
-**Nye Countdown** - Accelerating white flash countdown effect
-- Colors: White flashes
-- Brightness: 255 (flash), 5 (darkness)
-- Timing: Increasingly rapid flashes
-
-**Nye Confetti** - Rapidly changing multicolor confetti effect
-- Colors: Red, blue, purple, white, warm white
-- Brightness: 200-255 (bright and celebratory)
-- Transition: Instant changes
-
-**Nye Midnight Flash** - Bright flash at midnight with smooth fade
-- Colors: Bright white
-- Brightness: 255 (initial), 120 (fade)
-- Transition: 4 seconds (smooth fade-down)
-
-**Nye Sparkler** - High-variation sparkling white effect
-- Colors: White with large variations
-- Brightness: 180-255 (bright sparkles)
-- Transition: Instant
-
-**Nye Champagne** - Warm golden champagne bubble effect
-- Colors: Warm amber/golden tones
-- Brightness: 30-140 (gentle celebration)
-- Transition: 2-6 seconds
-
-**Stop** - Restores lights to previous state with smooth 1-second transition
-
----
-
-## 🔧 Customization
-
-### Adjusting Effect Speed
-
-Find the delay values in the effect and modify:
-
-```yaml
-# Faster (reduce delays)
-- delay:
-    seconds: "{{ range(2, 4) | random }}"  # Instead of range(4, 7)
-
-# Slower (increase delays)
-- delay:
-    seconds: "{{ range(6, 10) | random }}"  # Instead of range(4, 7)
-```
-
-### Adding Custom Colors
-
-Locate the `colors:` section or `base_xy:` in any effect and add your XY coordinates:
-
-```yaml
-colors:
-  - - 0.7006  # X coordinate (red)
-    - 0.2993  # Y coordinate
-  - - 0.2138  # X coordinate (green)
-    - 0.7097  # Y coordinate
-```
-
-### Adjusting Brightness Range
-
-Modify the `brightness_levels:` array or `range()` functions:
-
-```yaml
-brightness_levels:
-  - 255  # Maximum
-  - 200
-  - 150
-  - 100  # Minimum
-```
-
-### Creating a New Effect
-
-Copy an existing effect block in any script and modify:
-
-```yaml
-# Add to the choose: section
-- conditions:
-    - condition: template
-      value_template: "{{ effect == 'your_effect_name' }}"
-  sequence:
-    # Your custom effect logic here
-```
-
-Don't forget to add your effect name to the selector options at the top!
-
----
-
-## 📊 Performance Notes
-
-- **CPU Usage**: Minimal - scripts run in background
-- **Network Traffic**: Optimized for Zigbee networks with proper delays
-- **Recommended Lights Per Call**: Up to 10 lights (more may cause delays on older hubs)
-- **Effect Cycle Time**: 3-14 seconds depending on effect and randomization
-
----
-
-## 🔄 Compatibility
-
-- **Home Assistant**: 2023.x and newer
-- **Lights**: Any RGB lights supporting `light.turn_on` with `xy_color` and `brightness`
-- **Protocols**: Zigbee (recommended for Hue), Z-Wave, WiFi
-- **Bulbs**: 
-  - ✅ **Philips Hue** (original & newer models)
-  - ✅ WLED
-  - ✅ IKEA Tradfri
-  - ✅ Dresden Elektronik
-  - ✅ Any Zigbee RGB device
-
----
-
-## 🤝 Contributing
-
-Found a bug or want to add a new effect? Feel free to:
-1. Open an issue describing the problem or suggestion
-2. Fork the repository and create a pull request
-3. Share your custom effects in discussions
-
----
-
-## 📝 Version History
-
-### v2.0.0 (2025)
-- Split combined script into three dedicated holiday scripts
-- Improved organization and maintainability
-- Each script optimized for its specific holiday
-
-### v1.0.0 (2025)
-- Initial release
-- 5 Halloween effects: Hell, Lightning, Graveyard, Halloween, Blood, Stop
-- 5 Christmas effects: Xmas Twinkle, Xmas Tree, Xmas Snowfall, Xmas Candlelight, Xmas Gift Pulse, Stop
-- 5 New Year effects: NYE Countdown, NYE Confetti, NYE Midnight Flash, NYE Sparkler, NYE Champagne, Stop
-- Optimized for older Philips Hue bulbs
-- Full error handling and recovery
-
----
-
-## ⚠️ Disclaimer
-
-These scripts control your smart lights rapidly and with various colors/brightness levels. While optimized for reliability:
-
-- Test with a small number of lights first
-- Some very old bulbs may still have issues
-- Not responsible for any hardware issues (though none are expected)
-- May cause photosensitive reactions - use caution
-
----
-
-## 📜 License
+## License
 
 These projects are provided as-is for personal and commercial use. Feel free to modify and redistribute.
-
----
-
-## 🎃🎄🎆 Happy Holidays!
-
-Created with 💀🎅✨ for the Home Assistant community.
