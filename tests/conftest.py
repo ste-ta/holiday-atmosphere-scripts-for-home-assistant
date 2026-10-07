@@ -10,6 +10,7 @@ import yaml
 from homeassistant.core import HomeAssistant, Context
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.script_variables import ScriptVariables
 from homeassistant.helpers.script import Script, _ScriptRun, async_validate_actions_config
 from homeassistant.util import dt as dt_util
 
@@ -38,8 +39,16 @@ class ShowHarness:
             "supported_features": 32,
         })
 
-    async def run(self, name="holiday_atmosphere_controller", _context=None, **data):
-        return await self.scripts[name].async_run(data, _context or Context())
+    async def run(self, name="holiday_atmosphere", _context=None, **data):
+        script = self.scripts[name]
+        data["this"] = self.hass.states.get("script." + name)
+        if data.get("effect") == "stop":
+            return await script.async_run(data, _context or Context())
+        task = asyncio.create_task(script.async_run(data, _context or Context()))
+        self.tasks.append(task)
+        await self.settle()
+        if task.done() and not task.cancelled():
+            return task.result()
 
     async def settle(self, rounds=40):
         for _ in range(rounds):
@@ -50,7 +59,8 @@ class ShowHarness:
             await asyncio.sleep(0)
             if not any(s.is_running for s in self.scripts.values()) and all(t.done() for t in self.tasks):
                 for task in self.tasks:
-                    task.result()
+                    if not task.cancelled():
+                        task.result()
                 return
         raise AssertionError("Show did not complete")
 
@@ -59,9 +69,7 @@ class ShowHarness:
         entity_ids = data.get("entity_id", [])
         if isinstance(entity_ids, str):
             entity_ids = [entity_ids]
-        if call.domain == "input_text":
-            self.hass.states.async_set(entity_ids[0], data["value"])
-        elif call.domain == "scene":
+        if call.domain == "scene":
             if call.service == "create":
                 if self.capture_error:
                     raise HomeAssistantError("Snapshot failed")
@@ -89,14 +97,6 @@ class ShowHarness:
                 attributes = dict(self.hass.states.get(entity).attributes)
                 attributes.update({key: data[key] for key in ("brightness", "xy_color")})
                 self.hass.states.async_set(entity, "on", attributes)
-        elif call.domain == "script":
-            for entity in entity_ids:
-                script = self.scripts[entity.removeprefix("script.")]
-                if call.service == "turn_off":
-                    await script.async_stop()
-                else:
-                    # HA script.turn_on starts a task and returns without waiting.
-                    self.tasks.append(asyncio.create_task(script.async_run(data.get("variables", {}), Context())))
 
 
 @pytest_asyncio.fixture
@@ -114,26 +114,16 @@ async def show(tmp_path, monkeypatch):
 
     delay_method = "_async_delay_step" if hasattr(_ScriptRun, "_async_delay_step") else "_async_step_delay"
     monkeypatch.setattr(_ScriptRun, delay_method, delay)
-    package = yaml.safe_load((ROOT / "packages/holiday_atmosphere.yaml").read_text())
-    for name, config in package["script"].items():
-        sequence = cv.SCRIPT_SCHEMA(config["sequence"])
-        sequence = await async_validate_actions_config(hass, sequence)
-        script = Script(hass, sequence, name, "script", script_mode=config["mode"], max_runs=config.get("max", 10))
-        harness.scripts[name] = script
-
-        async def direct(call, script=script):
-            await script.async_run(dict(call.data), call.context)
-
-        hass.services.async_register("script", name, direct)
-    for domain, services in {
-        "scene": ["create", "turn_on", "delete"],
-        "input_text": ["set_value"],
-        "light": ["turn_on"],
-        "script": ["turn_on", "turn_off"],
-    }.items():
+    config = yaml.safe_load((ROOT / "holiday-atmosphere.yaml").read_text())
+    sequence = await async_validate_actions_config(hass, cv.SCRIPT_SCHEMA(config["sequence"]))
+    harness.scripts["holiday_atmosphere"] = Script(
+        hass, sequence, "holiday_atmosphere", "script", script_mode=config["mode"],
+        variables=ScriptVariables(config["variables"]),
+    )
+    hass.states.async_set("script.holiday_atmosphere", "off")
+    for domain, services in {"scene": ["create", "turn_on", "delete"], "light": ["turn_on"]}.items():
         for service in services:
             hass.services.async_register(domain, service, harness.service)
-    hass.states.async_set("input_text.holiday_atmosphere_session", "{}")
     harness.light("light.one", brightness=80)
     harness.light("light.two", state="off", brightness=120)
     yield harness

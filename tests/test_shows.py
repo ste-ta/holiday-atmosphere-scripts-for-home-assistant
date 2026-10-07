@@ -1,5 +1,4 @@
 import asyncio
-import json
 from pathlib import Path
 
 import pytest
@@ -10,23 +9,22 @@ from homeassistant.core import Context
 from homeassistant.helpers.entity import entity_sources
 
 ROOT = Path(__file__).resolve().parents[1]
-BACKUP = "scene.holiday_atmosphere_backup"
+BACKUP = "scene.holiday_atmosphere_backup_holiday_atmosphere"
 
 
 async def test_all_scripts_pass_ha_schema(show):
-    package = yaml.safe_load((ROOT / "packages/holiday_atmosphere.yaml").read_text())
-    for script in package["script"].values():
-        SCRIPT_ENTITY_SCHEMA(script)
+    SCRIPT_ENTITY_SCHEMA(yaml.safe_load((ROOT / "holiday-atmosphere.yaml").read_text()))
+
 
 
 async def test_switch_preserves_original_and_stop_restores(show):
-    await show.run("halloween_atmosphere", lights=["light.one", "light.two"], effect="hell")
+    await show.run(lights=["light.one", "light.two"], effect="hell")
     await show.settle()
-    await show.run("christmas_atmosphere", lights=["light.two", "light.one"], effect="xmas_tree")
+    await show.run(lights=["light.two", "light.one"], effect="xmas_tree")
     await show.settle()
     assert show.capture_count == 1
-    assert len(show.scripts["holiday_atmosphere_runner"]._runs) == 1
-    await show.run("newyear_atmosphere", effect="stop")
+    assert len(show.scripts["holiday_atmosphere"]._runs) == 1
+    await show.run(effect="stop")
     assert show.hass.states.get("light.one").attributes["brightness"] == 80
     assert show.hass.states.get("light.two").state == "off"
     assert BACKUP not in show.snapshots
@@ -60,16 +58,14 @@ async def test_changed_targets_restore_old_lights_and_start_new_session(show):
     {"effect": "hell", "lights": ["light.one"], "brightness_max": True},
     {"effect": "hell", "lights": ["light.one"], "duration": float("inf")},
 ])
-async def test_invalid_requests_do_not_interrupt_active_show(show, data):
+async def test_invalid_requests_stop_updates_but_keep_original_backup(show, data):
     await show.run(effect="xmas_tree", lights="light.one")
     await show.settle()
     snapshot = show.snapshots[BACKUP].copy()
-    token = show.hass.states.get("input_text.holiday_atmosphere_session").state
     # HA's stop/error action marks the trace as aborted rather than raising to the caller.
     await show.run(**data)
-    assert show.scripts["holiday_atmosphere_runner"].is_running
+    assert not show.scripts["holiday_atmosphere"].is_running
     assert show.snapshots[BACKUP] == snapshot
-    assert show.hass.states.get("input_text.holiday_atmosphere_session").state == token
 
 
 async def test_restore_error_retains_backup_for_retry(show):
@@ -79,7 +75,7 @@ async def test_restore_error_retains_backup_for_retry(show):
     with pytest.raises(HomeAssistantError):
         await show.run(effect="stop")
     assert BACKUP in show.snapshots
-    assert not show.scripts["holiday_atmosphere_runner"].is_running
+    assert not show.scripts["holiday_atmosphere"].is_running
     show.restore_error = False
     await show.run(effect="stop")
     assert show.hass.states.get("light.one").attributes["brightness"] == 80
@@ -91,7 +87,7 @@ async def test_capture_failure_never_changes_lights(show):
     with pytest.raises(HomeAssistantError):
         await show.run(effect="hell", lights="light.one")
     assert not show.commands
-    assert not show.scripts["holiday_atmosphere_runner"].is_running
+    assert not show.scripts["holiday_atmosphere"].is_running
 
 
 async def test_unavailable_saved_light_retains_backup(show):
@@ -116,17 +112,16 @@ async def test_deduplication_groups_and_unavailable_targets(show):
     await show.run(effect="stop")
 
 
-async def test_obsolete_timer_does_not_stop_new_effect(show):
-    # Multiple starts from the same automation inherit the same HA context.
+async def test_replacing_timed_run_cancels_its_cleanup(show):
     context = Context()
-    await show.run(effect="hell", lights="light.one", _context=context)
-    await show.settle()
-    old_token = json.loads(show.hass.states.get("input_text.holiday_atmosphere_session").state)["token"]
+    await show.run(effect="hell", lights="light.one", duration=30, _context=context)
     await show.run(effect="xmas_tree", lights="light.one", _context=context)
-    await show.run(effect="stop", expected_session=old_token)
-    assert show.scripts["holiday_atmosphere_runner"].is_running
+    await show.settle(100)
+    assert show.scripts["holiday_atmosphere"].is_running
+    assert show.capture_count == 1
     assert BACKUP in show.snapshots
     await show.run(effect="stop")
+    assert not show.snapshots
 
 
 async def test_duration_brightness_cap_and_pacing(show):
@@ -161,14 +156,14 @@ async def test_countdown_accelerates_and_ends_at_timestamp(show, targets):
     assert show.time.timestamp() == pytest.approx(end, abs=0.002)
 
 
-async def test_concurrent_holiday_requests_share_one_runner(show):
+async def test_concurrent_effect_requests_share_one_run(show):
     await asyncio.gather(
-        show.run("halloween_atmosphere", lights="light.one", effect="hell"),
-        show.run("christmas_atmosphere", lights="light.one", effect="xmas_tree"),
-        show.run("newyear_atmosphere", lights="light.one", effect="nye_champagne"),
+        show.run(lights="light.one", effect="hell"),
+        show.run(lights="light.one", effect="xmas_tree"),
+        show.run(lights="light.one", effect="nye_champagne"),
     )
     await show.settle()
-    assert len(show.scripts["holiday_atmosphere_runner"]._runs) == 1
+    assert len(show.scripts["holiday_atmosphere"]._runs) == 1
     assert show.capture_count == 1
     await show.run(effect="stop")
 
